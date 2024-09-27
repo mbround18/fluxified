@@ -19,8 +19,11 @@ logger = logging.getLogger("Bootstrap")
 # Kubernetes config and clients
 NAMESPACE = "flux-system"
 SECRET_NAME = "flux-system-ssh"
-BOOTSTRAP_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), "../../bootstrap"))
+BOOTSTRAP_PATH = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "../../bootstrap")
+)
 FLUX_CRD_URL = "https://github.com/fluxcd/flux2/releases/latest/download/install.yaml"
+
 
 # Load Kubernetes config
 def load_kube_config():
@@ -36,6 +39,7 @@ def load_kube_config():
     global v1
     v1 = client.CoreV1Api()
 
+
 def get_github_repo_url() -> str:
     """Get the default GitHub repository in 'owner/repo' format."""
     try:
@@ -43,20 +47,21 @@ def get_github_repo_url() -> str:
             ["git", "remote", "get-url", "origin"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            check=True
+            check=True,
         )
-        repo_url = result.stdout.decode('utf-8').strip()
+        repo_url = result.stdout.decode("utf-8").strip()
         if repo_url.startswith("git@"):
-            repo_path = repo_url.split(':', 1)[1]
+            repo_path = repo_url.split(":", 1)[1]
         elif repo_url.startswith("https://"):
-            repo_path = repo_url.split('github.com/', 1)[1]
+            repo_path = repo_url.split("github.com/", 1)[1]
         else:
             logger.error("Unsupported GitHub repository URL format.")
             return None
-        return repo_path.rstrip('.git')
+        return repo_path.rstrip(".git")
     except CalledProcessError as e:
         logger.error(f"Error retrieving GitHub repository URL: {e}")
         return None
+
 
 def get_github_known_hosts() -> str:
     """Fetch known hosts entries for GitHub using ssh-keyscan."""
@@ -67,10 +72,11 @@ def get_github_known_hosts() -> str:
             stderr=subprocess.PIPE,
             check=True,
         )
-        return result.stdout.decode('utf-8').strip()
+        return result.stdout.decode("utf-8").strip()
     except CalledProcessError as e:
         logger.error(f"Error fetching known hosts from GitHub: {e}")
         return None
+
 
 def check_github_deploy_key(g: Github, GITHUB_REPO: str, DEPLOY_KEY_NAME: str) -> bool:
     """Check if the deploy key exists in the GitHub repository."""
@@ -86,7 +92,10 @@ def check_github_deploy_key(g: Github, GITHUB_REPO: str, DEPLOY_KEY_NAME: str) -
         logger.error(f"Error checking deploy key: {e}")
         return False
 
-def add_github_deploy_key(g: Github, GITHUB_REPO: str, DEPLOY_KEY_NAME: str, public_key: str):
+
+def add_github_deploy_key(
+    g: Github, GITHUB_REPO: str, DEPLOY_KEY_NAME: str, public_key: str
+):
     """Add a deploy key to the GitHub repository."""
     try:
         repo = g.get_repo(GITHUB_REPO)
@@ -94,6 +103,7 @@ def add_github_deploy_key(g: Github, GITHUB_REPO: str, DEPLOY_KEY_NAME: str, pub
         logger.info("Deploy key added to GitHub.")
     except GithubException as e:
         logger.error(f"Error adding deploy key: {e}")
+
 
 def check_kubernetes_secret() -> bool:
     """Check if the Kubernetes secret for the SSH key exists."""
@@ -106,6 +116,7 @@ def check_kubernetes_secret() -> bool:
             return False
         logger.error(f"Error checking Kubernetes secret: {e}")
         return False
+
 
 def create_kubernetes_namespace():
     """Ensure the flux-system namespace exists."""
@@ -120,6 +131,7 @@ def create_kubernetes_namespace():
         else:
             logger.error(f"Error checking namespace: {e}")
 
+
 def create_ssh_keypair() -> tuple:
     """Generate an SSH keypair for Flux in a temporary directory."""
     temp_dir = tempfile.mkdtemp()
@@ -127,10 +139,21 @@ def create_ssh_keypair() -> tuple:
     logger.info(f"Generating SSH key pair in {temp_dir}...")
 
     try:
-        subprocess.check_call([
-            "ssh-keygen", "-t", "rsa", "-b", "4096", "-C", "flux",
-            "-f", key_path, "-N", ""
-        ])
+        subprocess.check_call(
+            [
+                "ssh-keygen",
+                "-t",
+                "rsa",
+                "-b",
+                "4096",
+                "-C",
+                "flux",
+                "-f",
+                key_path,
+                "-N",
+                "",
+            ]
+        )
     except CalledProcessError as e:
         logger.error(f"Error generating SSH key pair: {e}")
         return None, None, None
@@ -142,11 +165,12 @@ def create_ssh_keypair() -> tuple:
 
     return public_key, private_key, temp_dir
 
+
 def create_kubernetes_secret(private_key: str, known_hosts: str):
     """Create a Kubernetes secret for the SSH key and known hosts."""
     secret_data = {
         "identity": base64.b64encode(private_key.encode()).decode(),
-        "known_hosts": base64.b64encode(known_hosts.encode()).decode()
+        "known_hosts": base64.b64encode(known_hosts.encode()).decode(),
     }
     secret = client.V1Secret(
         metadata=client.V1ObjectMeta(name=SECRET_NAME, namespace=NAMESPACE),
@@ -159,6 +183,7 @@ def create_kubernetes_secret(private_key: str, known_hosts: str):
     except ApiException as e:
         logger.error(f"Error creating Kubernetes secret: {e}")
 
+
 def check_flux_crds() -> bool:
     """Check if Flux CRDs are installed."""
     try:
@@ -169,7 +194,7 @@ def check_flux_crds() -> bool:
             "gitrepositories.source.toolkit.fluxcd.io",
             "kustomizations.kustomize.toolkit.fluxcd.io",
             "helmrepositories.source.toolkit.fluxcd.io",
-            "helmreleases.helm.toolkit.fluxcd.io"
+            "helmreleases.helm.toolkit.fluxcd.io",
         ]
 
         installed_crds = {crd.metadata.name for crd in crds.items}
@@ -184,13 +209,12 @@ def check_flux_crds() -> bool:
         logger.error(f"Error checking Flux CRDs: {e}")
         return False
 
+
 def install_flux_crds():
     """Install Flux CRDs from the official URL."""
     try:
         logger.info("Installing Flux CRDs...")
-        subprocess.check_call([
-            "kubectl", "apply", "-f", FLUX_CRD_URL
-        ])
+        subprocess.check_call(["kubectl", "apply", "-f", FLUX_CRD_URL])
         logger.info("Flux CRDs installed successfully.")
     except CalledProcessError as e:
         logger.error(f"Error installing Flux CRDs: {e}")
@@ -200,14 +224,16 @@ def apply_bootstrap_resources():
     """Apply bootstrap Kubernetes manifests."""
     try:
         if not os.path.isdir(BOOTSTRAP_PATH):
-            raise FileNotFoundError(f"Bootstrap path {BOOTSTRAP_PATH} is not a valid directory.")
+            raise FileNotFoundError(
+                f"Bootstrap path {BOOTSTRAP_PATH} is not a valid directory."
+            )
 
         # Load all YAML files in the bootstrap directory
         for root, dirs, files in os.walk(BOOTSTRAP_PATH):
             for file in files:
                 if file.endswith(".yaml") or file.endswith(".yml"):
                     file_path = os.path.join(root, file)
-                    with open(file_path, 'r') as f:
+                    with open(file_path, "r") as f:
                         resources = list(yaml.safe_load_all(f))
                         for resource in resources:
                             api_version = resource.get("apiVersion", "")
@@ -224,38 +250,74 @@ def apply_bootstrap_resources():
                                 # Delete the existing custom object if it exists
                                 try:
                                     client.CustomObjectsApi().get_namespaced_custom_object(
-                                        group=group, version=version, namespace=namespace, plural=plural, name=name
+                                        group=group,
+                                        version=version,
+                                        namespace=namespace,
+                                        plural=plural,
+                                        name=name,
                                     )
-                                    logger.info(f"Deleting existing Flux custom object {kind}/{name} in {namespace}")
+                                    logger.info(
+                                        f"Deleting existing Flux custom object {kind}/{name} in {namespace}"
+                                    )
                                     client.CustomObjectsApi().delete_namespaced_custom_object(
-                                        group=group, version=version, namespace=namespace, plural=plural, name=name
+                                        group=group,
+                                        version=version,
+                                        namespace=namespace,
+                                        plural=plural,
+                                        name=name,
                                     )
                                 except ApiException as e:
                                     if e.status != 404:
-                                        logger.error(f"Error checking/deleting Flux custom object {kind}/{name}: {e}")
+                                        logger.error(
+                                            f"Error checking/deleting Flux custom object {kind}/{name}: {e}"
+                                        )
 
                                 # Create the new Flux custom object
-                                logger.info(f"Creating Flux custom object {kind}/{name} in {namespace}")
+                                logger.info(
+                                    f"Creating Flux custom object {kind}/{name} in {namespace}"
+                                )
                                 client.CustomObjectsApi().create_namespaced_custom_object(
-                                    group=group, version=version, namespace=namespace, plural=plural, body=resource
+                                    group=group,
+                                    version=version,
+                                    namespace=namespace,
+                                    plural=plural,
+                                    body=resource,
                                 )
                             else:
                                 # Handle core Kubernetes resources
-                                if hasattr(client.CoreV1Api(), f"create_namespaced_{kind.lower()}"):
-                                    create_fn = getattr(client.CoreV1Api(), f"create_namespaced_{kind.lower()}")
+                                if hasattr(
+                                    client.CoreV1Api(),
+                                    f"create_namespaced_{kind.lower()}",
+                                ):
+                                    create_fn = getattr(
+                                        client.CoreV1Api(),
+                                        f"create_namespaced_{kind.lower()}",
+                                    )
                                     try:
                                         # Check if the resource exists and delete if it does
-                                        resource_exists = getattr(client.CoreV1Api(), f"read_namespaced_{kind.lower()}")
+                                        resource_exists = getattr(
+                                            client.CoreV1Api(),
+                                            f"read_namespaced_{kind.lower()}",
+                                        )
                                         resource_exists(namespace=namespace, name=name)
-                                        logger.info(f"Deleting existing resource {kind}/{name} in {namespace}")
-                                        delete_fn = getattr(client.CoreV1Api(), f"delete_namespaced_{kind.lower()}")
+                                        logger.info(
+                                            f"Deleting existing resource {kind}/{name} in {namespace}"
+                                        )
+                                        delete_fn = getattr(
+                                            client.CoreV1Api(),
+                                            f"delete_namespaced_{kind.lower()}",
+                                        )
                                         delete_fn(namespace=namespace, name=name)
                                     except ApiException as e:
                                         if e.status != 404:
-                                            logger.error(f"Error checking/deleting resource {kind}/{name}: {e}")
+                                            logger.error(
+                                                f"Error checking/deleting resource {kind}/{name}: {e}"
+                                            )
 
                                     # Create the new resource
-                                    logger.info(f"Creating resource {kind}/{name} in {namespace}")
+                                    logger.info(
+                                        f"Creating resource {kind}/{name} in {namespace}"
+                                    )
                                     create_fn(namespace=namespace, body=resource)
                                 else:
                                     logger.error(f"Unsupported resource kind: {kind}")
@@ -285,7 +347,9 @@ def main():
     # Get the GitHub token from environment variables
     GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
     if not GITHUB_TOKEN:
-        logger.error("GitHub token not found. Please set the GITHUB_TOKEN environment variable.")
+        logger.error(
+            "GitHub token not found. Please set the GITHUB_TOKEN environment variable."
+        )
         return
 
     # Get the GitHub repository in 'owner/repo' format
@@ -321,7 +385,9 @@ def main():
 
         known_hosts = get_github_known_hosts()
         if not known_hosts:
-            logger.error("Failed to retrieve GitHub known hosts, aborting secret creation.")
+            logger.error(
+                "Failed to retrieve GitHub known hosts, aborting secret creation."
+            )
             return
 
         if not public_key_exists:
@@ -336,6 +402,7 @@ def main():
     if temp_dir:
         shutil.rmtree(temp_dir)
         logger.info(f"Temporary directory {temp_dir} removed.")
+
 
 if __name__ == "__main__":
     main()
