@@ -6,6 +6,7 @@ metadata:
 spec:
   interval: 10m
   path: "./clusters/roanoke"
+  wait: true
   prune: true
   sourceRef:
     kind: GitRepository

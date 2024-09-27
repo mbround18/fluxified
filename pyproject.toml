@@ -19,3 +19,6 @@ license = {text = "MIT"}
 
 [tool.pdm]
 distribution = false
+
+[tool.pdm.scripts]
+reconcile = ["pdm", "run", "src/fluxified/reconcile.py"]

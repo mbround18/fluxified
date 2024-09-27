@@ -1,9 +1,0 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
-metadata:
-  name: roanoke-configuration
-  namespace: flux-system
-
-resources:
-  - ../../overlays/istio/kustomize.yaml
