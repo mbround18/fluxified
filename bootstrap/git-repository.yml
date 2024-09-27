@@ -1,0 +1,13 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: roanoke-config
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: ssh://git@github.com/mbround18/fluxified.git # Using SSH URL for Git access
+  ref:
+    branch: main # Adjust if you are using a different branch
+  secretRef:
+    name: flux-system-ssh # SSH key for accessing the private Git repository
+  timeout: 20s
