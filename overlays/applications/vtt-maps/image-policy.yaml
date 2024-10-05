@@ -1,0 +1,10 @@
+apiVersion: image.toolkit.fluxcd.io/v1beta1
+kind: ImagePolicy
+metadata:
+  name: vtt-maps-policy
+  namespace: flux-system
+spec:
+  imageRepositoryRef:
+    name: vtt-maps
+  policy:
+    tag: "static-site" # Track the specific tag `static-site`

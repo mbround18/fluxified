@@ -1,0 +1,33 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: vtt-maps
+  namespace: vtt-maps
+spec:
+  hosts:
+    - "vtt-maps.dnd-apps.dev"
+  gateways:
+    - vtt-maps-gateway
+  http:
+    - match:
+        - port: 80
+          uri:
+            prefix: "/"
+      redirect:
+        scheme: https
+      route:
+        - destination:
+            host: vtt-maps
+            port:
+              number: 80
+    - match:
+        - port: 443
+          uri:
+            prefix: "/"
+      rewrite:
+        uri: "/"
+      route:
+        - destination:
+            host: vtt-maps
+            port:
+              number: 80

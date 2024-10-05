@@ -5,4 +5,4 @@ metadata:
   name: cluster-kustomization
 
 resources:
-  - ../../overlays/istio
+  - ../../overlays/system/istio
