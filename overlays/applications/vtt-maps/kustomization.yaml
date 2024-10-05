@@ -9,10 +9,6 @@ namespace: vtt-maps
 resources:
   - namespace.yaml
   - certificate.yaml
-  - git-repository.yaml
-  - image-repository.yaml
-  - image-policy.yaml
-  - flux-kustomization.yaml
   - deployment.yaml
   - service.yaml
   - gateway.yaml
