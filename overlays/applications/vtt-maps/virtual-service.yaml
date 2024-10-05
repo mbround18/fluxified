@@ -9,10 +9,7 @@ spec:
   gateways:
     - vtt-maps-gateway
   http:
-    - match:
-        - uri:
-            prefix: "/"
-      route:
+    - route:
         - destination:
             host: vtt-maps
             port:
