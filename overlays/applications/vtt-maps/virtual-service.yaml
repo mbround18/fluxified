@@ -21,4 +21,4 @@ spec:
         - destination:
             host: vtt-maps
             port:
-              number: 80
+              number: 443

@@ -20,4 +20,12 @@ spec:
           image: mbround18/vtt-maps:static-site
           imagePullPolicy: Always # Ensures always pulling the latest version of the tag
           ports:
-            - containerPort: 80
+            - containerPort: 443
+          volumeMounts:
+            - name: tls-certificates
+              mountPath: /etc/ssl/certs
+              readOnly: true
+      volumes:
+        - name: tls-certificates
+          secret:
+            secretName: vtt-maps-tls-secret
