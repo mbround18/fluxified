@@ -9,5 +9,16 @@ spec:
     name: letsencrypt-cloudflare
     kind: ClusterIssuer
   commonName: vtt-maps.dnd-apps.dev
+
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 4096
+
+  isCA: false
+  usages:
+    - server auth
+    - client auth
+
   dnsNames:
     - vtt-maps.dnd-apps.dev
