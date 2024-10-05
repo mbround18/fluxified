@@ -14,5 +14,4 @@ spec:
       hosts:
         - "vtt-maps.dnd-apps.dev"
       tls:
-        credentialName: vtt-maps-tls-secret
-        mode: SIMPLE
+        mode: PASSTHROUGH
