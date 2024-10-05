@@ -12,12 +12,6 @@ spec:
     - match:
         - uri:
             prefix: "/"
-      redirect:
-        scheme: https
-    - match:
-        - uri:
-            prefix: "/"
-      route:
         - destination:
             host: vtt-maps
             port:
