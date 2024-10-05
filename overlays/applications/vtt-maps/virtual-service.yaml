@@ -10,22 +10,13 @@ spec:
     - vtt-maps-gateway
   http:
     - match:
-        - port: 80
-          uri:
+        - uri:
             prefix: "/"
       redirect:
         scheme: https
-      route:
-        - destination:
-            host: vtt-maps
-            port:
-              number: 80
     - match:
-        - port: 443
-          uri:
+        - uri:
             prefix: "/"
-      rewrite:
-        uri: "/"
       route:
         - destination:
             host: vtt-maps
