@@ -7,6 +7,7 @@ spec:
   type: ClusterIP
   ports:
     - port: 443
+      name: https
       targetPort: 443
   selector:
     app: vtt-maps
