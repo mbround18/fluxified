@@ -12,7 +12,7 @@ spec:
     - match:
         - uri:
             prefix: "/"
-    - destination:
-        host: vtt-maps
-        port:
-          number: 443
+        - destination:
+            host: vtt-maps
+            port:
+              number: 443
