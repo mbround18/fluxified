@@ -6,3 +6,4 @@ metadata:
 
 resources:
   - ../../overlays/system/istio
+  - ../../overlays/applications/vtt-maps
