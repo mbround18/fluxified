@@ -25,4 +25,4 @@ spec:
     - vtt-maps.dnd-apps.dev
 
   additionalOutputFormats:
-    - type: CombinedPEM  # PEM private key and cert chain combined
+    - type: CombinedPEM # PEM private key and cert chain combined

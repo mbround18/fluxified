@@ -4,12 +4,15 @@ metadata:
   name: vtt-maps
   namespace: vtt-maps
 spec:
-  hosts:
+  hosts: &hosts
     - "vtt-maps.dnd-apps.dev"
   gateways:
     - vtt-maps-gateway
-  http:
-    - route:
+  tls:
+    - match:
+        - port: 443
+          sniHosts: *hosts
+      route:
         - destination:
             host: vtt-maps
             port:
