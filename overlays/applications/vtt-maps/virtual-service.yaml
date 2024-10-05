@@ -12,6 +12,7 @@ spec:
     - match:
         - uri:
             prefix: "/"
+      route:
         - destination:
             host: vtt-maps
             port:
