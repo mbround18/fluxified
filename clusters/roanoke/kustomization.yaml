@@ -5,5 +5,8 @@ metadata:
   name: cluster-kustomization
 
 resources:
+  # System Resources
   - ../../overlays/system/istio
+  - ../../overlays/system/kiali
+  # Application Resources
   - ../../overlays/applications/vtt-maps
