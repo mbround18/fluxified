@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kiali-cert
+  namespace: istio-system
+spec:
+  secretName: kiali-tls-secret
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  commonName: kiali.boop.ninja
+  dnsNames:
+    - kiali.boop.ninja

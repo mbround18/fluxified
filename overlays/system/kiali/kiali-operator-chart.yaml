@@ -53,5 +53,3 @@ spec:
         deployment:
           accessible_namespaces:
             - "**"
-
-

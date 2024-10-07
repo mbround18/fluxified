@@ -5,12 +5,17 @@ import tempfile
 import shutil
 import logging
 import traceback
+import sys
 
 import yaml
 from github import Github, GithubException
-from kubernetes import client, config, utils
+from kubernetes import client
 from kubernetes.client.rest import ApiException
 from subprocess import CalledProcessError
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from fluxified.k8s.with_context import FluxContext
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,21 +28,6 @@ BOOTSTRAP_PATH = os.path.normpath(
     os.path.join(os.path.dirname(__file__), "../../bootstrap")
 )
 FLUX_CRD_URL = "https://github.com/fluxcd/flux2/releases/latest/download/install.yaml"
-
-
-# Load Kubernetes config
-def load_kube_config():
-    try:
-        if os.getenv("KUBECONFIG"):
-            config.load_kube_config(config_file=os.getenv("KUBECONFIG"))
-        else:
-            config.load_kube_config()
-    except Exception as e:
-        logger.error(f"Error loading Kubernetes configuration: {e}")
-        exit(1)
-
-    global v1
-    v1 = client.CoreV1Api()
 
 
 def get_github_repo_url() -> str:
@@ -105,7 +95,7 @@ def add_github_deploy_key(
         logger.error(f"Error adding deploy key: {e}")
 
 
-def check_kubernetes_secret() -> bool:
+def check_kubernetes_secret(v1) -> bool:
     """Check if the Kubernetes secret for the SSH key exists."""
     try:
         v1.read_namespaced_secret(SECRET_NAME, NAMESPACE)
@@ -118,7 +108,7 @@ def check_kubernetes_secret() -> bool:
         return False
 
 
-def create_kubernetes_namespace():
+def create_kubernetes_namespace(v1):
     """Ensure the flux-system namespace exists."""
     try:
         v1.read_namespace(NAMESPACE)
@@ -166,7 +156,7 @@ def create_ssh_keypair() -> tuple:
     return public_key, private_key, temp_dir
 
 
-def create_kubernetes_secret(private_key: str, known_hosts: str):
+def create_kubernetes_secret(v1, private_key: str, known_hosts: str):
     """Create a Kubernetes secret for the SSH key and known hosts."""
     secret_data = {
         "identity": base64.b64encode(private_key.encode()).decode(),
@@ -184,10 +174,9 @@ def create_kubernetes_secret(private_key: str, known_hosts: str):
         logger.error(f"Error creating Kubernetes secret: {e}")
 
 
-def check_flux_crds() -> bool:
+def check_flux_crds(crd_api) -> bool:
     """Check if Flux CRDs are installed."""
     try:
-        crd_api = client.ApiextensionsV1Api()
         crds = crd_api.list_custom_resource_definition()
         required_crds = [
             "buckets.source.toolkit.fluxcd.io",
@@ -220,7 +209,7 @@ def install_flux_crds():
         logger.error(f"Error installing Flux CRDs: {e}")
 
 
-def apply_bootstrap_resources():
+def apply_bootstrap_resources(v1, crd_api):
     """Apply bootstrap Kubernetes manifests."""
     try:
         if not os.path.isdir(BOOTSTRAP_PATH):
@@ -249,7 +238,7 @@ def apply_bootstrap_resources():
 
                                 # Delete the existing custom object if it exists
                                 try:
-                                    client.CustomObjectsApi().get_namespaced_custom_object(
+                                    crd_api.get_namespaced_custom_object(
                                         group=group,
                                         version=version,
                                         namespace=namespace,
@@ -259,7 +248,7 @@ def apply_bootstrap_resources():
                                     logger.info(
                                         f"Deleting existing Flux custom object {kind}/{name} in {namespace}"
                                     )
-                                    client.CustomObjectsApi().delete_namespaced_custom_object(
+                                    crd_api.delete_namespaced_custom_object(
                                         group=group,
                                         version=version,
                                         namespace=namespace,
@@ -276,7 +265,7 @@ def apply_bootstrap_resources():
                                 logger.info(
                                     f"Creating Flux custom object {kind}/{name} in {namespace}"
                                 )
-                                client.CustomObjectsApi().create_namespaced_custom_object(
+                                crd_api.create_namespaced_custom_object(
                                     group=group,
                                     version=version,
                                     namespace=namespace,
@@ -285,27 +274,21 @@ def apply_bootstrap_resources():
                                 )
                             else:
                                 # Handle core Kubernetes resources
-                                if hasattr(
-                                    client.CoreV1Api(),
-                                    f"create_namespaced_{kind.lower()}",
-                                ):
+                                if hasattr(v1, f"create_namespaced_{kind.lower()}"):
                                     create_fn = getattr(
-                                        client.CoreV1Api(),
-                                        f"create_namespaced_{kind.lower()}",
+                                        v1, f"create_namespaced_{kind.lower()}"
                                     )
                                     try:
                                         # Check if the resource exists and delete if it does
                                         resource_exists = getattr(
-                                            client.CoreV1Api(),
-                                            f"read_namespaced_{kind.lower()}",
+                                            v1, f"read_namespaced_{kind.lower()}"
                                         )
                                         resource_exists(namespace=namespace, name=name)
                                         logger.info(
                                             f"Deleting existing resource {kind}/{name} in {namespace}"
                                         )
                                         delete_fn = getattr(
-                                            client.CoreV1Api(),
-                                            f"delete_namespaced_{kind.lower()}",
+                                            v1, f"delete_namespaced_{kind.lower()}"
                                         )
                                         delete_fn(namespace=namespace, name=name)
                                     except ApiException as e:
@@ -341,67 +324,70 @@ def get_plural(kind):
 
 
 def main():
-    # Load Kubernetes config
-    load_kube_config()
+    with FluxContext() as flux:
+        v1 = flux.v1
+        crd_api = flux.crd_api
 
-    # Get the GitHub token from environment variables
-    GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-    if not GITHUB_TOKEN:
-        logger.error(
-            "GitHub token not found. Please set the GITHUB_TOKEN environment variable."
-        )
-        return
-
-    # Get the GitHub repository in 'owner/repo' format
-    GITHUB_REPO = get_github_repo_url()
-    if not GITHUB_REPO:
-        logger.error("GitHub repository URL not found or unsupported format.")
-        return
-
-    DEPLOY_KEY_NAME = "flux-deploy-key"
-
-    if not os.path.exists(BOOTSTRAP_PATH):
-        raise FileNotFoundError(f"Failed to find bootstrap path at {BOOTSTRAP_PATH} !!")
-
-    # Initialize GitHub client
-    g = Github(GITHUB_TOKEN)
-
-    # Check and install Flux CRDs if missing
-    if not check_flux_crds():
-        install_flux_crds()
-
-    public_key_exists = check_github_deploy_key(g, GITHUB_REPO, DEPLOY_KEY_NAME)
-
-    create_kubernetes_namespace()
-    secret_exists = check_kubernetes_secret()
-
-    temp_dir = None
-
-    if not public_key_exists or not secret_exists:
-        public_key, private_key, temp_dir = create_ssh_keypair()
-        if not public_key or not private_key:
-            logger.error("Failed to generate SSH key pair.")
-            return
-
-        known_hosts = get_github_known_hosts()
-        if not known_hosts:
+        # Get the GitHub token from environment variables
+        GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+        if not GITHUB_TOKEN:
             logger.error(
-                "Failed to retrieve GitHub known hosts, aborting secret creation."
+                "GitHub token not found. Please set the GITHUB_TOKEN environment variable."
             )
             return
 
-        if not public_key_exists:
-            add_github_deploy_key(g, GITHUB_REPO, DEPLOY_KEY_NAME, public_key)
+        # Get the GitHub repository in 'owner/repo' format
+        GITHUB_REPO = get_github_repo_url()
+        if not GITHUB_REPO:
+            logger.error("GitHub repository URL not found or unsupported format.")
+            return
 
-        if not secret_exists:
-            create_kubernetes_secret(private_key, known_hosts)
+        DEPLOY_KEY_NAME = "flux-deploy-key"
 
-    apply_bootstrap_resources()
+        if not os.path.exists(BOOTSTRAP_PATH):
+            raise FileNotFoundError(
+                f"Failed to find bootstrap path at {BOOTSTRAP_PATH} !!"
+            )
 
-    # Clean up the temporary directory if it was created
-    if temp_dir:
-        shutil.rmtree(temp_dir)
-        logger.info(f"Temporary directory {temp_dir} removed.")
+        # Initialize GitHub client
+        g = Github(GITHUB_TOKEN)
+
+        # Check and install Flux CRDs if missing
+        if not check_flux_crds(crd_api):
+            install_flux_crds()
+
+        public_key_exists = check_github_deploy_key(g, GITHUB_REPO, DEPLOY_KEY_NAME)
+
+        create_kubernetes_namespace(v1)
+        secret_exists = check_kubernetes_secret(v1)
+
+        temp_dir = None
+
+        if not public_key_exists or not secret_exists:
+            public_key, private_key, temp_dir = create_ssh_keypair()
+            if not public_key or not private_key:
+                logger.error("Failed to generate SSH key pair.")
+                return
+
+            known_hosts = get_github_known_hosts()
+            if not known_hosts:
+                logger.error(
+                    "Failed to retrieve GitHub known hosts, aborting secret creation."
+                )
+                return
+
+            if not public_key_exists:
+                add_github_deploy_key(g, GITHUB_REPO, DEPLOY_KEY_NAME, public_key)
+
+            if not secret_exists:
+                create_kubernetes_secret(v1, private_key, known_hosts)
+
+        apply_bootstrap_resources(v1, crd_api)
+
+        # Clean up the temporary directory if it was created
+        if temp_dir:
+            shutil.rmtree(temp_dir)
+            logger.info(f"Temporary directory {temp_dir} removed.")
 
 
 if __name__ == "__main__":

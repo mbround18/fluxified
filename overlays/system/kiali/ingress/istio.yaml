@@ -1,0 +1,39 @@
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: kiali-gateway
+  namespace: istio-system
+spec:
+  selector:
+    istio: ingressgateway # Use the Istio ingress gateway
+  servers:
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        credentialName: kiali-tls-secret # The secret created by Cert-Manager
+      hosts:
+        - "kiali.boop.ninja"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: kiali
+  namespace: istio-system
+spec:
+  hosts: &hosts
+    - "kiali.boop.ninja"
+  gateways:
+    - kiali-gateway
+  tls:
+    - match:
+        - port: 443
+          sniHosts: *hosts
+      route:
+        - destination:
+            host: kiali.istio-system.svc.cluster.local
+            port:
+              number: 20001 # Default HTTP port for Kiali

@@ -16,10 +16,12 @@ requires-python = "==3.12.*"
 readme = "README.md"
 license = {text = "MIT"}
 
-
 [tool.pdm]
 distribution = false
 
 [tool.pdm.scripts]
-reconcile = ["pdm", "run", "src/fluxified/reconcile.py"]
-bootstrap = ["pdm", "run", "src/fluxified/bootstrap.py"]
+reconcile = "pdm run src/fluxified/reconcile.py"
+bootstrap = "pdm run src/fluxified/bootstrap.py"
+lint = "pdm run ruff check src --fix"
+format = "pdm run ruff format src"
+prettier = "npx prettier --write ."

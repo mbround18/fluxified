@@ -1,27 +1,20 @@
 import os
 import time
-from kubernetes import client, config
+import sys
 from kubernetes.client.rest import ApiException
 import logging
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from fluxified.k8s.with_context import FluxContext
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Reconcile")
 
 
-# Load Kubernetes config
-def load_kube_config():
-    try:
-        if os.getenv("KUBECONFIG"):
-            config.load_kube_config(config_file=os.getenv("KUBECONFIG"))
-        else:
-            config.load_kube_config()
-    except Exception as e:
-        logger.error(f"Error loading Kubernetes configuration: {e}")
-        exit(1)
-
-
-def annotate_flux_crd(group, version, namespace, plural, name):
+def annotate_flux_crd(crd_api, group, version, namespace, plural, name):
     """Annotate a Flux custom resource to trigger reconciliation."""
     timestamp = str(int(time.time()))  # Use the current Unix timestamp
     annotation = {
@@ -30,7 +23,7 @@ def annotate_flux_crd(group, version, namespace, plural, name):
 
     try:
         # Patch the custom object with the annotation
-        client.CustomObjectsApi().patch_namespaced_custom_object(
+        crd_api.patch_namespaced_custom_object(
             group=group,
             version=version,
             namespace=namespace,
@@ -46,11 +39,9 @@ def annotate_flux_crd(group, version, namespace, plural, name):
         logger.error(f"Error annotating {plural}/{name}: {e}")
 
 
-def reconcile_all_flux_resources():
+def reconcile_all_flux_resources(flux):
     """Scan all Flux-related CRDs and annotate them to trigger reconciliation."""
     try:
-        crd_api = client.CustomObjectsApi()
-
         # Define all Flux CRD groups, versions, and plurals
         flux_crds = [
             {
@@ -80,24 +71,23 @@ def reconcile_all_flux_resources():
             },
         ]
 
-        # Scan each CRD and annotate all objects in each namespace
-        for crd in flux_crds:
-            group = crd["group"]
-            version = crd["version"]
-            plural = crd["plural"]
-
-            # List all namespaces
-            v1 = client.CoreV1Api()
-            namespaces = v1.list_namespace().items
-            for ns in namespaces:
-                namespace = ns.metadata.name
+        # List all namespaces and scan each CRD
+        namespaces = flux.v1.list_namespace().items
+        for ns in namespaces:
+            namespace = ns.metadata.name
+            for crd in flux_crds:
+                group = crd["group"]
+                version = crd["version"]
+                plural = crd["plural"]
                 try:
-                    resources = crd_api.list_namespaced_custom_object(
+                    resources = flux.crd_api.list_namespaced_custom_object(
                         group=group, version=version, namespace=namespace, plural=plural
                     )
                     for resource in resources.get("items", []):
                         name = resource["metadata"]["name"]
-                        annotate_flux_crd(group, version, namespace, plural, name)
+                        annotate_flux_crd(
+                            flux.crd_api, group, version, namespace, plural, name
+                        )
                 except ApiException as e:
                     if e.status != 404:
                         logger.error(f"Error listing {plural} in {namespace}: {e}")
@@ -107,5 +97,5 @@ def reconcile_all_flux_resources():
 
 
 if __name__ == "__main__":
-    load_kube_config()
-    reconcile_all_flux_resources()
+    with FluxContext() as flux:
+        reconcile_all_flux_resources(flux)
