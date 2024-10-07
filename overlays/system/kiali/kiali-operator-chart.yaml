@@ -12,7 +12,7 @@ spec:
       sourceRef:
         kind: HelmRepository
         name: kiali-repo
-        namespace: flux-system
+        namespace: istio-system
       version: "*"
   values:
     nameOverride: ""
